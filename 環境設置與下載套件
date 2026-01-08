@@ -1,0 +1,24 @@
+
+!nvidia-smi
+
+import locale
+def getpreferredencoding(do_setlocale = True):
+    return "UTF-8"
+locale.getpreferredencoding = getpreferredencoding
+
+
+%pip install ultralytics
+import ultralytics
+ultralytics.checks()
+
+下載資料集
+import gdown
+import os
+import shutil
+
+#下載training_image.
+gdown.download("https://drive.google.com/uc?export=download&id=1bnbA-3XbhZfR0UbT44vgB8-kaQUQNeIo","/content/training_image.zip")
+#下載training_label.
+gdown.download("https://drive.google.com/uc?export=download&id=1N1YbDrEc23_-rbf9FDDW_VmeSL3IT4C_","/content/training_label.zip")
+#下載訓練aortic_valve_colab.yaml
+gdown.download("https://drive.google.com/uc?export=download&id=1D5z965VXyW4_jmilGm2zfNo787UA5lUB","/content/aortic_valve_colab.yaml")
