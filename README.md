@@ -1,36 +1,29 @@
-# NKUST Neural Network Final Project
+# NKUST Neural Network Final Project (AICUP)
 
-This repository contains the source code for the NKUST Neural Network final project.
+This repository contains the code for dataset preparation, model training, and inference.
+All experiments are executed in Google Colab.
 
 ## Environment
 - Platform: Google Colab
-- Language: Python 3
+- Python: 3.x
 - Libraries:
+  - ultralytics
+  - gdown
   - numpy
-  - matplotlib
   - pillow
+  - matplotlib
 
-## Dataset Structure
+Install (Colab):
+```bash
+pip install ultralytics gdown
 training_image/
-└─ patient*/
-└─ *.png
+ └─ patient*/
+    └─ *.png
 
 training_label/
-└─ patient*/
-└─ *.txt
-
-## Label Format
-YOLO format:
-
-class_id x_center y_center width height (normalized)
-
-## Usage
-1. Prepare the dataset following the directory structure above.
-2. Modify the following paths in `dataset_statistics.py`:
-   - `IMAGE_ROOT`
-   - `LABEL_ROOT`
-   - `PLOT_DIR`
-3. Run the script using the command below:
-
-```bash
-python dataset_statistics.py
+ └─ patient*/
+    └─ *.txt
+class_id x_center y_center width height
+datasets/
+ ├─ train/images, train/labels
+ └─ val/images,   val/labels
