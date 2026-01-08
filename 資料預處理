@@ -1,0 +1,176 @@
+import os
+import shutil
+import random
+
+# --- 1. 尋找路徑與解壓縮 (保持您原本的邏輯) ---
+def find_patient_root(root):
+    for dirpath, dirnames, filenames in os.walk(root):
+        if any(d.startswith("patient") for d in dirnames):
+            return dirpath
+    return root
+
+if not os.path.isdir("./training_image") and os.path.exists("training_image.zip"):
+    os.makedirs("./training_image", exist_ok=True)
+    os.system("unzip -q training_image.zip -d ./training_image")
+
+if not os.path.isdir("./training_label") and os.path.exists("training_label.zip"):
+    os.makedirs("./training_label", exist_ok=True)
+    os.system("unzip -q training_label.zip -d ./training_label")
+
+IMG_ROOT = find_patient_root("./training_image")
+LBL_ROOT = find_patient_root("./training_label")
+
+print("IMG_ROOT =", IMG_ROOT)
+print("LBL_ROOT =", LBL_ROOT)
+
+# --- 2. 重建輸出資料夾 (確保乾淨) ---
+# 如果想要重跑，建議先清空 datasets 資料夾
+if os.path.exists("./datasets"):
+    shutil.rmtree("./datasets")
+
+os.makedirs("./datasets/train/images", exist_ok=True)
+os.makedirs("./datasets/train/labels", exist_ok=True)
+os.makedirs("./datasets/val/images", exist_ok=True)
+os.makedirs("./datasets/val/labels", exist_ok=True)
+
+# --- 3. 定義新的處理函數 (含 1:1 平衡與負樣本處理) ---
+def process_dataset_balanced(start, end, split):
+    print(f"\n正在處理 {split} 數據 (Patient {start:04d} - {end:04d})...")
+
+    # --- A. 收集階段 ---
+    all_positives = [] # 格式: (img_path, txt_path)
+    all_negatives = [] # 格式: img_path (只有圖片)
+
+    for i in range(start, end + 1):
+        patient = f"patient{i:04d}"
+        img_dir = os.path.join(IMG_ROOT, patient)
+        lbl_dir = os.path.join(LBL_ROOT, patient)
+
+        if not os.path.isdir(img_dir):
+            continue
+
+        # 遍歷該病人的所有圖片
+        for img_fname in os.listdir(img_dir):
+            if not img_fname.endswith(".png"):
+                continue
+
+            src_img_path = os.path.join(img_dir, img_fname)
+
+            # 檢查標註檔是否存在
+            base_name = os.path.splitext(img_fname)[0]
+            txt_fname = base_name + ".txt"
+            src_txt_path = os.path.join(lbl_dir, txt_fname)
+
+            if os.path.exists(src_txt_path):
+                all_positives.append((src_img_path, src_txt_path))
+            else:
+                all_negatives.append(src_img_path)
+
+    print(f"  - 掃描結果: 正樣本 {len(all_positives)} 張, 潛在負樣本 {len(all_negatives)} 張")
+
+    # --- B. 平衡與採樣階段 ---
+    target_count = len(all_positives)
+
+    # 隨機抽取負樣本以達到 1:1
+    if len(all_negatives) > target_count:
+        selected_negatives = random.sample(all_negatives, target_count)
+        print(f"  - 執行平衡: 隨機抽取 {target_count} 張負樣本 (1:1)")
+    else:
+        selected_negatives = all_negatives
+        print(f"  - 負樣本不足 ({len(all_negatives)} < {target_count})，使用全部負樣本")
+
+    # --- C. 複製檔案與建立空標註 ---
+    # 1. 處理正樣本
+    for img_src, txt_src in all_positives:
+        fname = os.path.basename(img_src)
+        shutil.copy(img_src, f"./datasets/{split}/images/{fname}")
+        shutil.copy(txt_src, f"./datasets/{split}/labels/{os.path.basename(txt_src)}")
+
+    # 2. 處理負樣本 (建立空 txt)
+    for img_src in selected_negatives:
+        fname = os.path.basename(img_src)
+
+        # 複製圖片
+        shutil.copy(img_src, f"./datasets/{split}/images/{fname}")
+
+        # 建立對應的空 txt 檔
+        txt_name = os.path.splitext(fname)[0] + ".txt"
+        dst_txt_path = f"./datasets/{split}/labels/{txt_name}"
+        with open(dst_txt_path, 'w') as f:
+            pass # 建立空檔案，代表無目標
+
+    print(f"  -> {split} 處理完成！總共: {len(all_positives) + len(selected_negatives)} 張圖片")
+
+# --- 4. 執行處理 ---
+# Train: Patient 1-30 (會進行 1:1 平衡)
+process_dataset_balanced(1, 30, "train")
+
+# Val: Patient 31-50 (通常驗證集不需要強制 1:1，但這裡也會套用相同邏輯以保持分佈一致)
+process_dataset_balanced(31, 50, "val")
+
+!pip install opencv-python
+
+import cv2
+import numpy as np
+import os
+import glob
+
+# --- 1. 定義統一遮罩的歸一化座標 ---
+# 使用您計算出來的靜態統一遮罩範圍
+UNIFIED_MASK_NORM = {
+    'x_min': 0.2140,
+    'y_min': 0.3175,
+    'x_max': 0.6005,
+    'y_max': 0.7275
+}
+
+# --- 2. 定義統一遮罩函數 ---
+def apply_unified_mask_and_save(image_path, norm_box):
+    """
+    對圖像應用固定的統一邊界框遮罩，將範圍外的部分變黑，並覆蓋原始檔案。
+    """
+    img = cv2.imread(image_path)
+    if img is None:
+        return
+
+    H, W, _ = img.shape
+
+    # 將歸一化座標轉換為像素座標
+    x_min = int(norm_box['x_min'] * W)
+    y_min = int(norm_box['y_min'] * H)
+    x_max = int(norm_box['x_max'] * W)
+    y_max = int(norm_box['y_max'] * H)
+
+    # 確保座標在圖像範圍內
+    x_min = max(0, x_min)
+    y_min = max(0, y_min)
+    x_max = min(W, x_max)
+    y_max = min(H, y_max)
+
+    # 創建一個全黑的遮罩
+    mask = np.zeros_like(img, dtype=np.uint8)
+
+    # 將統一邊界框區域設為白色 (255)
+    mask[y_min:y_max, x_min:x_max] = 255
+
+    # 應用遮罩
+    masked_img = cv2.bitwise_and(img, mask)
+
+    # 覆蓋原始圖像檔案
+    cv2.imwrite(image_path, masked_img)
+
+# --- 3. 執行遮罩處理於訓練和驗證集 ---
+print("--- 開始對訓練和驗證數據執行統一靜態遮罩預處理 ---")
+
+# 設定要處理的路徑
+DATA_PATHS = ["./datasets/train/", "./datasets/val/"]
+
+for base_path in DATA_PATHS:
+    images_dir = os.path.join(base_path, "images")
+
+    # 遍歷圖像資料夾中的所有 .png 圖像
+    for img_path in glob.glob(os.path.join(images_dir, "*.png")):
+        # 使用統一遮罩
+        apply_unified_mask_and_save(img_path, UNIFIED_MASK_NORM)
+
+print("--- 統一靜態遮罩預處理完成！訓練和驗證圖像已成功覆蓋。 ---")
