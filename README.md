@@ -16,14 +16,3 @@ All experiments are executed in Google Colab.
 Install (Colab):
 ```bash
 pip install ultralytics gdown
-training_image/
- └─ patient*/
-    └─ *.png
-
-training_label/
- └─ patient*/
-    └─ *.txt
-class_id x_center y_center width height
-datasets/
- ├─ train/images, train/labels
- └─ val/images,   val/labels
