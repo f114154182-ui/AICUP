@@ -16,6 +16,7 @@ All experiments are executed in Google Colab.
 Install (Colab):
 ```bash
 pip install ultralytics gdown
+
 Dataset Structure (Input)
 The dataset is organized as follows after downloading and unzipping:
 
