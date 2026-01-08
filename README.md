@@ -86,7 +86,18 @@ Output:
 - Final submission files (if required)
 
 ## How to Run
-Open and execute: 期末程式.ipynb
+
+1. Environment setup and dataset download:
+   - 環境設置與下載套件
+
+2. Dataset preprocessing:
+   - 資料預處理
+
+3. Model training:
+   - 訓練
+
+4. Inference / prediction:
+   - 預測
 
 ## Output Summary
 - Prepared dataset: datasets/
